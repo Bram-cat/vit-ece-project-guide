@@ -31,7 +31,7 @@ export default async function handler(req: Request): Promise<Response> {
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1024,
+        max_tokens: 3000,
         messages: [
           { role: 'system', content: systemPrompts[tab] ?? systemPrompts.pick },
           ...messages,
@@ -43,8 +43,11 @@ export default async function handler(req: Request): Promise<Response> {
       return Response.json({ error: `Upstream error ${upstream.status}` }, { status: upstream.status })
     }
 
-    const data = (await upstream.json()) as { choices?: Array<{ message?: { content?: string } }> }
-    const reply = data.choices?.[0]?.message?.content?.trim() || 'No response.'
+    const data = (await upstream.json()) as {
+      choices?: Array<{ message?: { content?: string; reasoning_content?: string } }>
+    }
+    const msg = data.choices?.[0]?.message
+    const reply = (msg?.content?.trim() || msg?.reasoning_content?.trim()) ?? 'No response.'
     return Response.json({ reply })
   } catch {
     return Response.json({ error: 'Request failed' }, { status: 500 })

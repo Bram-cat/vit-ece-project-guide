@@ -52,7 +52,7 @@ export function chatApi(): Plugin {
             },
             body: JSON.stringify({
               model: MODEL,
-              max_tokens: 1024,
+              max_tokens: 3000,
               messages: [
                 { role: 'system', content: systemPrompts[tab] ?? systemPrompts.pick },
                 ...messages,
@@ -67,9 +67,10 @@ export function chatApi(): Plugin {
           }
 
           const data = (await upstream.json()) as {
-            choices?: Array<{ message?: { content?: string } }>
+            choices?: Array<{ message?: { content?: string; reasoning_content?: string } }>
           }
-          const reply = data.choices?.[0]?.message?.content?.trim() || 'No response.'
+          const msg = data.choices?.[0]?.message
+          const reply = (msg?.content?.trim() || msg?.reasoning_content?.trim()) ?? 'No response.'
 
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify({ reply }))
