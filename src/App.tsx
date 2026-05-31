@@ -42,7 +42,7 @@ function App() {
     <div className={open ? 'app shell' : 'app shell collapsed'}>
       <aside className="sidebar" aria-label="Tabs">
         <div className="brand">
-          <span className="brand-mark">VIT</span>
+          <img className="brand-mark" src="/logo.png" alt="" width={34} height={34} />
           <span className="brand-name">ECE Studio</span>
         </div>
 
