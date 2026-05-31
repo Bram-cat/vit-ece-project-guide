@@ -16,23 +16,57 @@ type Message = {
   content: string
 }
 
-const tabs: Array<{ id: TabId; label: string; tag: string; Icon: ComponentType<{ className?: string }> }> = [
-  { id: 'pick', label: 'Project Decider', tag: '01', Icon: SparklesIcon },
-  { id: 'build', label: 'Build', tag: '02', Icon: WrenchIcon },
-  { id: 'record', label: 'Record & Papers', tag: '03', Icon: DocumentIcon },
+type TabConfig = {
+  id: TabId
+  label: string
+  tag: string
+  purpose: string
+  status: string
+  emptyTitle: string
+  emptyBody: string
+  placeholder: string
+  options: string[]
+  Icon: ComponentType<{ className?: string }>
+}
+
+const tabs: TabConfig[] = [
+  {
+    id: 'pick',
+    label: 'Pick Project',
+    tag: '01',
+    purpose: 'Understand what you want, then search parts and papers before showing 3 project choices.',
+    status: 'Asking constraints',
+    emptyTitle: 'Start with your rough idea',
+    emptyBody: 'You prompt first. The AI asks one question at a time, then checks the web for components, prices, papers, and feasibility.',
+    placeholder: 'Example: I want an IoT project under ₹3000...',
+    options: ['Low cost', 'Impressive demo', 'Research heavy', 'I am not sure'],
+    Icon: SparklesIcon,
+  },
+  {
+    id: 'build',
+    label: 'Build Project',
+    tag: '02',
+    purpose: 'Guide one build stage at a time: buying, wiring, coding, testing, or debugging.',
+    status: 'Waiting for build stage',
+    emptyTitle: 'Use after choosing a project',
+    emptyBody: 'Tell the AI where you are stuck. It should not dump the full build. It should guide the next practical step.',
+    placeholder: 'Example: I have the ESP32 and sensors, help me wire them...',
+    options: ['Buy parts', 'Wiring help', 'Code help', 'Debug an error'],
+    Icon: WrenchIcon,
+  },
+  {
+    id: 'record',
+    label: 'Record & Papers',
+    tag: '03',
+    purpose: 'Create only the section you ask for, using VIT format and paper-backed references.',
+    status: 'Choosing record output',
+    emptyTitle: 'Ask for one record task',
+    emptyBody: 'The AI should generate sections step by step: abstract, literature survey, diagram text, references, or export plan.',
+    placeholder: 'Example: Make the abstract and aim for my transformer monitor...',
+    options: ['Abstract only', 'Literature survey', 'Block diagram', 'IEEE references'],
+    Icon: DocumentIcon,
+  },
 ]
-
-const intro: Record<TabId, string> = {
-  pick: 'Tell me your budget, timeline, and interests — I will suggest a buildable, professor-friendly ECE project.',
-  build: 'Ask me about wiring, code, or debugging and I will guide the build stage by stage.',
-  record: 'Ask for VIT-format record sections or research papers and I will map them out.',
-}
-
-const placeholders: Record<TabId, string> = {
-  pick: 'Describe your budget, timeline, and interests…',
-  build: 'Ask for wiring, code, or debugging help…',
-  record: 'Ask for record sections or paper references…',
-}
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabId>('pick')
@@ -76,7 +110,6 @@ function App() {
         </button>
       </aside>
 
-      {/* key forces fresh chat state per tab */}
       <ChatPanel key={activeTab} tabId={activeTab} />
     </div>
   )
@@ -90,12 +123,11 @@ function ChatPanel({ tabId }: { tabId: TabId }) {
   const [error, setError] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
-  async function send(e: FormEvent) {
-    e.preventDefault()
-    const text = input.trim()
+  async function sendText(rawText: string) {
+    const text = rawText.trim()
     if (!text || loading) return
 
-    const next = [...messages, { role: 'user', content: text } as Message]
+    const next: Message[] = [...messages, { role: 'user', content: text }]
     setMessages(next)
     setInput('')
     setError(null)
@@ -118,18 +150,35 @@ function ChatPanel({ tabId }: { tabId: TabId }) {
     }
   }
 
+  function send(e: FormEvent) {
+    e.preventDefault()
+    void sendText(input)
+  }
+
   return (
     <main className="chat">
       <header className="chat-bar">
-        <p className="chat-meta">FIELD / {tab.tag} — VIT CHENNAI ECE</p>
-        <h1>{tab.label}</h1>
+        <div>
+          <p className="chat-meta">FIELD / {tab.tag} — VIT CHENNAI ECE</p>
+          <h1>{tab.label}</h1>
+          <p className="tab-purpose">{tab.purpose}</p>
+        </div>
+        <span className="status-chip">{loading ? 'Thinking' : tab.status}</span>
       </header>
 
       <div className="messages" ref={listRef} aria-live="polite">
         {messages.length === 0 && (
           <div className="empty" role="status">
             <tab.Icon className="empty-icon" />
-            <p>{intro[tabId]}</p>
+            <h2>{tab.emptyTitle}</h2>
+            <p>{tab.emptyBody}</p>
+            <div className="quick-options" aria-label="Suggested starting points">
+              {tab.options.map((option) => (
+                <button key={option} type="button" onClick={() => void sendText(option)}>
+                  {option}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -153,7 +202,7 @@ function ChatPanel({ tabId }: { tabId: TabId }) {
       <form className="composer" onSubmit={send}>
         <input
           aria-label="Chat message"
-          placeholder={placeholders[tabId]}
+          placeholder={tab.placeholder}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={loading}

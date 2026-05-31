@@ -1,10 +1,41 @@
 // Vercel Serverless Function: POST /api/chat
 // Holds the API key server-side and proxies to OpenCode Zen.
 
-const systemPrompts: Record<string, string> = {
-  pick: 'You are a senior VIT Chennai ECE student helping a junior pick a buildable, professor-friendly electronics project. Be concise. Suggest ideas with rough budget (INR), a suitability and professor-likeability sense, and one upgrade. Guide purchases from Indian vendors; never claim to buy.',
-  build: 'You are a senior VIT Chennai ECE student guiding assembly, wiring, code, and debugging of an electronics project. Be concise and practical. Build in stages, test parts separately, and stress low-voltage demo safety.',
-  record: 'You are a senior VIT Chennai ECE student helping write a VIT-format lab record and find supporting research papers. Be concise. Use the VIT section order and map papers to the right sections in IEEE style.',
+type ChatTab = 'pick' | 'build' | 'record'
+
+type IncomingMessage = {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+const sharedRules = `
+You are inside a simple VIT Chennai ECE project helper web app.
+Never dump everything you know.
+Ask exactly one question at a time until you and the student share enough understanding.
+When asking a question, give 3 to 5 numbered options.
+Keep replies under 120 words unless the user asks for detail.
+Prefer intuitive suggestions over lectures.
+If enough constraints are known, say what you will check next instead of asking redundant questions.
+Do not claim you purchased anything.
+`.
+  trim()
+
+const systemPrompts: Record<ChatTab, string> = {
+  pick: `${sharedRules}
+Purpose of this tab: help the student pick one buildable, professor-friendly ECE project.
+Flow: understand goal one question at a time, then search/validate components, prices, vendor links, papers, and examples before suggesting projects.
+Only after enough constraints, return exactly 3 compact project options with title, cost range, suitability, professor likeability, key part sources, paper availability, and one upgrade.
+Good questions: budget, timeline, preferred ECE area, skill level, professor goal.`,
+  build: `${sharedRules}
+Purpose of this tab: guide the selected project through buying, wiring, code, testing, and debugging.
+If no selected project is clear, ask the student to name or paste the chosen project first.
+Ask what stage they are in: buying parts, wiring, coding, testing, or stuck with an error.
+Give only the next practical step, with safety warnings for low-voltage demo work.`,
+  record: `${sharedRules}
+Purpose of this tab: create VIT-format record work and paper support for the selected project.
+If no selected project is clear, ask the student to name or paste the chosen project first.
+Ask which output they need: abstract, aim, literature survey, diagram explanation, references, or export plan.
+Generate one section at a time and map papers to record sections in IEEE style.`,
 }
 
 const BASE_URL = 'https://opencode.ai/zen/v1'
@@ -22,8 +53,8 @@ export default async function handler(req: Request): Promise<Response> {
 
   try {
     const { tab, messages } = (await req.json()) as {
-      tab: string
-      messages: Array<{ role: 'user' | 'assistant'; content: string }>
+      tab: ChatTab
+      messages: IncomingMessage[]
     }
 
     const upstream = await fetch(`${BASE_URL}/chat/completions`, {
@@ -31,7 +62,8 @@ export default async function handler(req: Request): Promise<Response> {
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 3000,
+        max_tokens: 700,
+        temperature: 0.35,
         messages: [
           { role: 'system', content: systemPrompts[tab] ?? systemPrompts.pick },
           ...messages,
