@@ -283,9 +283,71 @@
   filter: brightness(1.12);
 }
 
+.composer button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .send-icon {
   width: 20px;
   height: 20px;
+}
+
+/* Empty state */
+.empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty-icon {
+  width: 34px;
+  height: 34px;
+  color: oklch(0.55 0.1 290);
+}
+
+.empty p {
+  margin: 0;
+  max-width: 38ch;
+  line-height: 1.55;
+}
+
+/* Typing indicator */
+.typing {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: blink 1.2s infinite ease-in-out;
+}
+
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes blink {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing span { animation: none; opacity: 0.6; }
+}
+
+.chat-error {
+  margin: 4px 0 0;
+  color: oklch(0.72 0.16 30);
+  font-size: 0.88rem;
 }
 
 @media (max-width: 640px) {

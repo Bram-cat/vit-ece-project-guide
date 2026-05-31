@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from 'react'
+import { useRef, useState, type ComponentType, type FormEvent } from 'react'
 import './App.css'
 import {
   SparklesIcon,
@@ -12,8 +12,8 @@ import {
 type TabId = 'pick' | 'build' | 'record'
 
 type Message = {
-  role: 'student' | 'ai'
-  body: string
+  role: 'user' | 'assistant'
+  content: string
 }
 
 const tabs: Array<{ id: TabId; label: string; tag: string; Icon: ComponentType<{ className?: string }> }> = [
@@ -22,19 +22,10 @@ const tabs: Array<{ id: TabId; label: string; tag: string; Icon: ComponentType<{
   { id: 'record', label: 'Record & Papers', tag: '03', Icon: DocumentIcon },
 ]
 
-const starterMessages: Record<TabId, Message[]> = {
-  pick: [
-    { role: 'student', body: 'I need an ECE project that is cheap but professor-friendly.' },
-    { role: 'ai', body: 'Try a Smart Transformer Health Monitor with ESP32. Suitability 88, likeability 91. Add live graphs and fault alerts to stand out.' },
-  ],
-  build: [
-    { role: 'student', body: 'How do I assemble it without getting confused?' },
-    { role: 'ai', body: 'Build in stages: temperature, then current, then voltage, then ESP32 Wi-Fi logging. Test each sensor alone first. Use low-voltage demo inputs only.' },
-  ],
-  record: [
-    { role: 'student', body: 'Fit this to VIT record format and add papers.' },
-    { role: 'ai', body: 'Sections: Aim, Abstract, Components, Block Diagram, Theory, Methodology, Algorithm, Results, Applications, Future Scope, References. I will map two IEEE papers to the right sections.' },
-  ],
+const intro: Record<TabId, string> = {
+  pick: 'Tell me your budget, timeline, and interests — I will suggest a buildable, professor-friendly ECE project.',
+  build: 'Ask me about wiring, code, or debugging and I will guide the build stage by stage.',
+  record: 'Ask for VIT-format record sections or research papers and I will map them out.',
 }
 
 const placeholders: Record<TabId, string> = {
@@ -85,14 +76,47 @@ function App() {
         </button>
       </aside>
 
-      <ChatPanel tabId={activeTab} />
+      {/* key forces fresh chat state per tab */}
+      <ChatPanel key={activeTab} tabId={activeTab} />
     </div>
   )
 }
 
 function ChatPanel({ tabId }: { tabId: TabId }) {
-  const messages = starterMessages[tabId]
   const tab = tabs.find((t) => t.id === tabId)!
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  async function send(e: FormEvent) {
+    e.preventDefault()
+    const text = input.trim()
+    if (!text || loading) return
+
+    const next = [...messages, { role: 'user', content: text } as Message]
+    setMessages(next)
+    setInput('')
+    setError(null)
+    setLoading(true)
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tab: tabId, messages: next }),
+      })
+      if (!res.ok) throw new Error()
+      const data = (await res.json()) as { reply?: string }
+      setMessages((m) => [...m, { role: 'assistant', content: data.reply ?? 'No response.' }])
+    } catch {
+      setError('Could not reach the assistant. Check the server and try again.')
+    } finally {
+      setLoading(false)
+      requestAnimationFrame(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight }))
+    }
+  }
 
   return (
     <main className="chat">
@@ -101,18 +125,40 @@ function ChatPanel({ tabId }: { tabId: TabId }) {
         <h1>{tab.label}</h1>
       </header>
 
-      <div className="messages" aria-live="polite">
+      <div className="messages" ref={listRef} aria-live="polite">
+        {messages.length === 0 && (
+          <div className="empty" role="status">
+            <tab.Icon className="empty-icon" />
+            <p>{intro[tabId]}</p>
+          </div>
+        )}
+
         {messages.map((message, index) => (
           <div className={`message ${message.role}`} key={`${tabId}-${index}`}>
-            <span className="message-who">{message.role === 'ai' ? 'senior' : 'you'}</span>
-            <p>{message.body}</p>
+            <span className="message-who">{message.role === 'assistant' ? 'senior' : 'you'}</span>
+            <p>{message.content}</p>
           </div>
         ))}
+
+        {loading && (
+          <div className="message assistant" aria-live="polite">
+            <span className="message-who">senior</span>
+            <p className="typing"><span /><span /><span /></p>
+          </div>
+        )}
+
+        {error && <p className="chat-error" role="alert">{error}</p>}
       </div>
 
-      <form className="composer" onSubmit={(e) => e.preventDefault()}>
-        <input aria-label="Chat message" placeholder={placeholders[tabId]} />
-        <button type="submit" aria-label="Send">
+      <form className="composer" onSubmit={send}>
+        <input
+          aria-label="Chat message"
+          placeholder={placeholders[tabId]}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          disabled={loading}
+        />
+        <button type="submit" aria-label="Send" disabled={loading || !input.trim()}>
           <SendIcon className="send-icon" />
         </button>
       </form>
